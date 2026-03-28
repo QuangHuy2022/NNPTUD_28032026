@@ -13,14 +13,17 @@ const path = require('path');
 router.post("/import", async function (req, res, next) {
   try {
     // Find the 'USER' role
-    let userRole = await roleModel.findOne({ name: 'USER', isDeleted: false });
+    let userRole = await roleModel.findOne({ 
+      where: { name: 'USER', isDeleted: false } 
+    });
     if (!userRole) {
-      userRole = await roleModel.findOne({ name: 'user', isDeleted: false });
+      userRole = await roleModel.findOne({ 
+        where: { name: 'user', isDeleted: false } 
+      });
     }
     
     if (!userRole) {
-      userRole = new roleModel({ name: 'USER', description: 'Default user role' });
-      await userRole.save();
+      userRole = await roleModel.create({ name: 'USER', description: 'Default user role' });
     }
 
     const workbook = new ExcelJS.Workbook();
@@ -50,7 +53,7 @@ router.post("/import", async function (req, res, next) {
             username,
             password,
             email,
-            userRole._id,
+            userRole.id,
             null, // session
             username, // fullName
             undefined, // avatarUrl
@@ -77,17 +80,21 @@ router.post("/import", async function (req, res, next) {
   }
 });
 
-router.get("/", CheckLogin,CheckRole("ADMIN", "USER"), async function (req, res, next) {
-    let users = await userModel
-      .find({ isDeleted: false })
+router.get("/", CheckLogin, CheckRole("ADMIN", "USER"), async function (req, res, next) {
+    let users = await userModel.findAll({ 
+      where: { isDeleted: false },
+      include: [{ model: roleModel, as: 'role' }]
+    });
     res.send(users);
-  });
+});
 
 router.get("/:id", async function (req, res, next) {
   try {
-    let result = await userModel
-      .find({ _id: req.params.id, isDeleted: false })
-    if (result.length > 0) {
+    let result = await userModel.findOne({ 
+      where: { id: req.params.id, isDeleted: false },
+      include: [{ model: roleModel, as: 'role' }]
+    });
+    if (result) {
       res.send(result);
     }
     else {
@@ -112,12 +119,18 @@ router.post("/", CreateAnUserValidator, validatedResult, async function (req, re
 router.put("/:id", ModifyAnUserValidator, validatedResult, async function (req, res, next) {
   try {
     let id = req.params.id;
-    let updatedItem = await userModel.findByIdAndUpdate(id, req.body, { new: true });
+    let [updatedRowsCount, updatedItems] = await userModel.update(req.body, { 
+      where: { id: id },
+      returning: true,
+      individualHooks: true // Required for bcrypt hooks
+    });
 
-    if (!updatedItem) return res.status(404).send({ message: "id not found" });
+    if (updatedRowsCount === 0) return res.status(404).send({ message: "id not found" });
 
-    let populated = await userModel
-      .findById(updatedItem._id)
+    let populated = await userModel.findOne({
+      where: { id: id },
+      include: [{ model: roleModel, as: 'role' }]
+    });
     res.send(populated);
   } catch (err) {
     res.status(400).send({ message: err.message });
@@ -127,15 +140,14 @@ router.put("/:id", ModifyAnUserValidator, validatedResult, async function (req, 
 router.delete("/:id", async function (req, res, next) {
   try {
     let id = req.params.id;
-    let updatedItem = await userModel.findByIdAndUpdate(
-      id,
+    let [updatedRowsCount] = await userModel.update(
       { isDeleted: true },
-      { new: true }
+      { where: { id: id } }
     );
-    if (!updatedItem) {
+    if (updatedRowsCount === 0) {
       return res.status(404).send({ message: "id not found" });
     }
-    res.send(updatedItem);
+    res.send({ message: "deleted successfully" });
   } catch (err) {
     res.status(400).send({ message: err.message });
   }

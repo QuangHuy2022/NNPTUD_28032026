@@ -3,12 +3,15 @@ var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
-let mongoose = require('mongoose')
+const { connectDB } = require('./utils/db');
 
 var indexRouter = require('./routes/index');
 var usersRouter = require('./routes/users');
 
 var app = express();
+
+// Connect to PostgreSQL
+connectDB();
 
 // view engine setup
 app.set('views', path.join(__dirname, 'views'));
@@ -30,16 +33,6 @@ app.use('/api/v1/auth', require('./routes/auth'))
 app.use('/api/v1/carts', require('./routes/cart'))
 app.use('/api/v1/upload', require('./routes/upload'))
 
-mongoose.connect('mongodb://localhost:27017/NNPTUD-C4');
-mongoose.connection.on('connected', function () {
-  console.log("connected");
-})
-mongoose.connection.on('disconnected', function () {
-  console.log("disconnected");
-})
-mongoose.connection.on('disconnecting', function () {
-  console.log("disconnecting");
-})
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {
   next(createError(404));
